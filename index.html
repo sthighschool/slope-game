@@ -3,14 +3,105 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Slope Game — Gamepad Demo</title>
+  <title>Slope Game — Gamepad Demo (diagnostics)</title>
   <style>
     body { font-family: system-ui, sans-serif; margin: 20px; }
     #game { width: 800px; height: 400px; background: #111; color: #fff; position: relative; overflow: hidden; }
     #player { width: 40px; height: 40px; background: #0f0; position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); }
     #info { margin-top: 10px; }
     button { padding: 8px 12px; }
+    #diag { margin-top: 8px; color: #000; background: #ffd; padding: 8px; max-height: 160px; overflow: auto; font-family: monospace; font-size: 12px; }
+    .error { color: #900; font-weight: bold; }
   </style>
+  <script>
+    // Diagnostic helpers: show messages in #status and #diag
+    (function () {
+      function el(id) { return document.getElementById(id); }
+      function addDiag(text, cls) {
+        const d = el('diag');
+        if (!d) return;
+        const p = document.createElement('div');
+        if (cls) p.className = cls;
+        p.textContent = text;
+        d.appendChild(p);
+        // keep last messages visible
+        d.scrollTop = d.scrollHeight;
+      }
+      window._diag = {
+        setStatus(s) {
+          const sEl = el('status');
+          if (sEl) sEl.textContent = s;
+          addDiag('[status] ' + s);
+          console.log('[diag] ' + s);
+        },
+        error(e) {
+          addDiag('[error] ' + e, 'error');
+          console.error(e);
+        }
+      };
+
+      // global error handling
+      window.addEventListener('error', function (ev) {
+        const msg = ev && (ev.message || ev.error && ev.error.message) || String(ev);
+        window._diag.error('window error: ' + msg + (ev.filename ? ' @' + ev.filename + ':' + ev.lineno : ''));
+      });
+      window.addEventListener('unhandledrejection', function (ev) {
+        window._diag.error('unhandledrejection: ' + (ev.reason && ev.reason.stack ? ev.reason.stack : String(ev.reason)));
+      });
+
+      // Try to fetch the game script to detect 404/MIME issues
+      function checkScript(path) {
+        fetch(path, { method: 'GET', cache: 'no-store' })
+          .then(function (r) {
+            if (!r.ok) {
+              window._diag.setStatus('Failed to load ' + path + ' — HTTP ' + r.status);
+            } else {
+              window._diag.setStatus('Found ' + path + ' — HTTP ' + r.status + ' (' + (r.headers.get('content-type')||'unknown') + ')');
+            }
+            return r.text();
+          })
+          .then(function (txt) {
+            if (txt) {
+              addPreview(txt);
+            }
+          })
+          .catch(function (err) {
+            window._diag.error('fetch ' + path + ' error: ' + err);
+          });
+      }
+
+      function addPreview(text) {
+        const max = 1000;
+        const preview = text.length > max ? text.slice(0, max) + '\\n... (truncated) ...' : text;
+        addDiag('script preview:\\n' + preview);
+      }
+
+      // Expose actions for user if needed
+      window._diagActions = {
+        checkGameScript: function () { checkScript('gamepad.js'); },
+        showGamepads: function () {
+          try {
+            const gps = navigator.getGamepads ? navigator.getGamepads() : [];
+            window._diag.setStatus('navigator.getGamepads() length=' + gps.length);
+            for (let i = 0; i < gps.length; i++) {
+              if (gps[i]) addDiag('GP[' + i + ']: id=' + gps[i].id + ' mapping=' + gps[i].mapping + ' axes=' + gps[i].axes.length + ' btns=' + gps[i].buttons.length);
+            }
+          } catch (e) {
+            window._diag.error('showGamepads error: ' + e);
+          }
+        }
+      };
+
+      // Run an initial quick check after DOM is ready
+      document.addEventListener('DOMContentLoaded', function () {
+        // Delay slightly to let scripts requested with defer run if they do
+        setTimeout(function () {
+          window._diag.setStatus('DOMContentLoaded — performing script fetch check for gamepad.js');
+          checkScript('gamepad.js');
+        }, 120);
+      });
+    })();
+  </script>
 </head>
 <body>
   <h1>Slope Game — Gamepad Demo</h1>
@@ -19,9 +110,53 @@
   </div>
   <div id="info">
     <button id="startBtn">Start Game</button>
+    <button id="checkGP">Show Gamepads</button>
     <span id="status">No gamepad</span>
   </div>
 
+  <div id="diag" aria-live="polite"></div>
+
+  <!-- Your normal game script (kept separate). If your script is in a different path adjust the src. -->
   <script src="gamepad.js" defer></script>
+
+  <script>
+    // Small wrapper to start the game safely and report errors into the overlay
+    (function () {
+      const startBtn = document.getElementById('startBtn');
+      const checkBtn = document.getElementById('checkGP');
+
+      function safeCall(fnName) {
+        try {
+          if (typeof window[fnName] === 'function') {
+            window[fnName]();
+            window._diag.setStatus('Called ' + fnName);
+          } else {
+            window._diag.setStatus(fnName + ' not found on window');
+          }
+        } catch (err) {
+          window._diag.error('Exception while calling ' + fnName + ': ' + (err && err.stack ? err.stack : err));
+        }
+      }
+
+      startBtn.addEventListener('click', function () {
+        // Common init names: initGame, startGame, start
+        window._diag.setStatus('Start clicked — trying start(), initGame(), startGame()');
+        safeCall('start');
+        safeCall('initGame');
+        safeCall('startGame');
+        // Also list gamepads to help debugging
+        setTimeout(function () { window._diagActions.showGamepads(); }, 100);
+      });
+
+      checkBtn.addEventListener('click', function () {
+        window._diagActions.showGamepads();
+      });
+
+      // Also make a test call after load if ?autostart=1 in URL
+      if (location.search.indexOf('autostart=1') !== -1) {
+        setTimeout(function () { startBtn.click(); }, 200);
+      }
+    })();
+  </script>
 </body>
 </html>
