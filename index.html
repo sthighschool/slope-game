@@ -1,38 +1,49 @@
 <!DOCTYPE html>
-<html lang="en-us">
-  <head>
-    <meta charset="utf-8">
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Math Homework Simulator</title>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Math Document Processor</title>
+    <link rel="stylesheet" href="css/style.css">
     <style>
-      body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: #000; font-family: sans-serif; }
-      #gameContainer { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; }
-      #driver-status { position: absolute; bottom: 15px; left: 15px; color: #00ff00; background: rgba(0,0,0,0.85); padding: 8px 15px; border-radius: 5px; font-size: 13px; font-weight: bold; pointer-events: none; z-index: 99999; border: 1px solid #333; }
+        #driver-status {
+            position: absolute;
+            bottom: 15px;
+            left: 15px;
+            color: #ff3333;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 8px 15px;
+            border-radius: 5px;
+            font-family: sans-serif;
+            font-size: 13px;
+            font-weight: bold;
+            pointer-events: none;
+            z-index: 999999;
+            border: 1px solid #444;
+        }
     </style>
-    <!-- Pulls configuration assets locally from YOUR repository folders -->
-    <script src="TemplateData/UnityProgress.js"></script>  
-    <script src="Build/UnityLoader.js"></script>
-    <script>
-      // Tells the engine to load the file assets straight from your repository
-      var gameInstance = UnityLoader.instantiate("gameContainer", "Build/slope.json", {onProgress: UnityProgress});
-    </script>
-  </head>
-  <body>
-    
+</head>
+<body>
     <div id="driver-status">🔌 CONNECT CONTROLLER & PRESS ANY BUTTON</div>
-    <div id="gameContainer"></div>
+
+    <!-- Core Game Interface Structural Containers -->
+    <div id="game-container"></div>
+
+    <!-- Core Engine Scripts -->
+    <script src="js/game.js"></script>
 
     <script>
         const statusBox = document.getElementById('driver-status');
         let activeGamepadIndex = null;
-        let leftActive = false;
-        let rightActive = false;
+        let leftPressed = false;
+        let rightPressed = false;
 
+        // Force browser window focus context
         window.focus();
 
         window.addEventListener("gamepadconnected", (event) => {
             activeGamepadIndex = event.gamepad.index;
-            statusBox.innerText = "🎮 LOCAL DRIVER LIVE! Steer with Stick / D-Pad.";
+            statusBox.innerText = "🎮 NATIVE CONTROLLER LIVE! Use Stick or D-Pad.";
             statusBox.style.borderColor = "#00ff00";
             statusBox.style.color = "#00ff00";
         });
@@ -40,59 +51,66 @@
         window.addEventListener("gamepaddisconnected", () => {
             activeGamepadIndex = null;
             statusBox.innerText = "🔌 CONTROLLER DISCONNECTED";
-            statusBox.style.borderColor = "#ff0000";
-            statusBox.style.color = "#ff0000";
+            statusBox.style.borderColor = "#ff3333";
+            statusBox.style.color = "#ff3333";
         });
 
-        // Key simulation injection engine targeting global document loops
-        function fireKey(eventType, keyCode, keyString) {
-            const targetElement = document.getElementById('gameContainer') || document.body;
-            
-            const keyEvent = new KeyboardEvent(eventType, {
-                bubbles: true, cancelable: true, keyCode: keyCode, key: keyString, which: keyCode
+        // Generates clean system keyboard payloads directly across the page runtime
+        function simulateKeyEvent(type, keyCode, keyString) {
+            const targetElement = document.body;
+            const eventPayload = new KeyboardEvent(type, {
+                bubbles: true,
+                cancelable: true,
+                keyCode: keyCode,
+                key: keyString,
+                which: keyCode
             });
-            
-            window.dispatchEvent(keyEvent);
-            document.dispatchEvent(keyEvent);
-            targetElement.dispatchEvent(keyEvent);
-            
-            const canvas = document.querySelector('canvas');
-            if (canvas) canvas.dispatchEvent(keyEvent);
+            window.dispatchEvent(eventPayload);
+            document.dispatchEvent(eventPayload);
+            targetElement.dispatchEvent(eventPayload);
         }
 
-        // Hardware Polling tick (60Hz loop)
-        function hardwareTick() {
+        // Hardware Polling tick sequence operating natively at 60Hz
+        function executionLoop() {
             if (activeGamepadIndex !== null) {
                 const gamepad = navigator.getGamepads()[activeGamepadIndex];
                 if (gamepad) {
-                    let stickX = gamepad.axes[0]; // Axis 0 = Horizontal Left Analog Stick
-                    let dPadLeft = gamepad.buttons[14]?.pressed || false;  // D-pad Left standard map
-                    let dPadRight = gamepad.buttons[15]?.pressed || false; // D-pad Right standard map
+                    let axisX = gamepad.axes[0]; // Tracking Left Analog stick horizontal plane
+                    let dPadLeft = gamepad.buttons[14]?.pressed || false;  // Standard system map D-pad Left
+                    let dPadRight = gamepad.buttons[15]?.pressed || false; // Standard system map D-pad Right
 
-                    let wantLeft = stickX < -0.3 || dPadLeft;
-                    let wantRight = stickX > 0.3 || dPadRight;
+                    let wantLeft = axisX < -0.3 || dPadLeft;
+                    let wantRight = axisX > 0.3 || dPadRight;
 
-                    if (wantLeft && !leftActive) {
-                        fireKey('keydown', 37, 'ArrowLeft'); fireKey('keydown', 65, 'a');
-                        leftActive = true;
-                    } else if (!wantLeft && leftActive) {
-                        fireKey('keyup', 37, 'ArrowLeft'); fireKey('keyup', 65, 'a');
-                        leftActive = false;
+                    // Handle Left Input Executions
+                    if (wantLeft && !leftPressed) {
+                        simulateKeyEvent('keydown', 37, 'ArrowLeft');
+                        simulateKeyEvent('keydown', 65, 'a');
+                        leftPressed = true;
+                    } else if (!wantLeft && leftPressed) {
+                        simulateKeyEvent('keyup', 37, 'ArrowLeft');
+                        simulateKeyEvent('keyup', 65, 'a');
+                        leftPressed = false;
                     }
 
-                    if (wantRight && !rightActive) {
-                        fireKey('keydown', 39, 'ArrowRight'); fireKey('keydown', 68, 'd');
+                    // Handle Right Input Executions
+                    if (wantRight && !rightPressed) {
+                        simulateKeyEvent('keydown', 39, 'ArrowRight');
+                        simulateKeyEvent('keydown', 68, 'd');
                         rightActive = true;
-                    } else if (!wantRight && rightActive) {
-                        fireKey('keyup', 39, 'ArrowRight'); fireKey('keyup', 68, 'd');
+                        rightPressed = true;
+                    } else if (!wantRight && rightPressed) {
+                        simulateKeyEvent('keyup', 39, 'ArrowRight');
+                        simulateKeyEvent('keyup', 68, 'd');
                         rightActive = false;
+                        rightPressed = false;
                     }
                 }
             }
-            requestAnimationFrame(hardwareTick);
+            requestAnimationFrame(executionLoop);
         }
         
-        hardwareTick();
+        executionLoop();
     </script>
-  </body>
+</body>
 </html>
